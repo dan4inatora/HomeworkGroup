@@ -42,7 +42,7 @@ public:
     void readHeader(std::ifstream &fin);
     void writeHeader(std::ofstream &fout);
     void printHeader()const;
-    int pixelArraysize();
+    int rowSize();
     unsigned int getfilesize()const{
         return this->fileSize;
     }
@@ -54,6 +54,9 @@ public:
     }
     signed short getBitsPerPixel()const{
         return this->bits_per_pixel;
+    }
+    unsigned int getHeight()const{
+        return this->height;
     }
     int realsize(int n);
 
@@ -116,10 +119,9 @@ void Header :: printHeader()const{
 
 }
 
-int Header :: pixelArraysize(){
+int Header :: rowSize(){
     int rows = floor((this->bits_per_pixel * width + 31)/32) * 4;
-    int pixelarray = rows * abs(height);
-    return pixelarray;
+    return rows;
 }
 
 //int Header :: realsize(int n){
@@ -146,18 +148,25 @@ class ColorScheme{
 
     public:
         ColorScheme();
+        ColorScheme(int n);
         ColorScheme(const ColorScheme& other);
         ColorScheme& operator = (const ColorScheme& other);
         ~ColorScheme();
         void push(const char c);
-        void pushNElements(int num);
         void readColorScheme(std::ifstream& fin);
         size_t getSchemesize()const;
         void printScheme();
         void writeScheme(std::ofstream &fout);
+        void pushNElements(int num);
 
 
 };
+void ColorScheme :: pushNElements(int num){
+    for(int i = 0; i < num; i++){
+        this->push('a');
+    }
+}
+
 
 void ColorScheme :: writeScheme(std::ofstream &fout){
     if(!fout.is_open()){
@@ -212,10 +221,11 @@ void ColorScheme :: push(const char c){
     this->colorscheme[size++] = c;
 }
 
-void ColorScheme :: pushNElements(int num){
-    for(int i = 0; i < num; i++){
-        this->push('a');
-    }
+
+ColorScheme :: ColorScheme(int n){
+    this->size = n;
+    this->colorscheme = new char[n];
+    this->capacity = 2 * n;
 }
 
 void ColorScheme :: readColorScheme(std::ifstream& fin){
@@ -247,16 +257,22 @@ class Pixel{
         void erase();
     public:
         Pixel();
+        Pixel(int n);
         Pixel(const Pixel& other);
         Pixel& operator = (const Pixel& other);
         ~Pixel();
         void readPixel(std::ifstream &fin);
         void push(const char c);
-        void pushNElements(int n);
         size_t getPixelSize()const;
         void printPixel();
         void writePixel(std::ofstream& fout);
 };
+
+Pixel :: Pixel(int n){
+    this->size = n;
+    this->capacity = 2 * n;
+    this->pixelsize = new char[n];
+}
 
 void Pixel :: writePixel(std::ofstream& fout){
         if(!fout.is_open()){
@@ -311,11 +327,6 @@ void Pixel :: push(const char c){
     this->pixelsize[size++] = c;
 }
 
-void Pixel :: pushNElements(int num){
-    for(int i = 0; i < num; i++){
-        this->push('a');
-    }
-}
 
 void Pixel :: readPixel(std::ifstream& fin){
     if(!fin){
@@ -337,21 +348,27 @@ void Pixel :: printPixel(){
 
 
 
-class Pixelmap{
+class Rowmap{
    private:
        std::vector<Pixel> pixels;
    public:
-       Pixelmap();
-       void resizePixelmap(int elements, int bits_pixel);
+       Rowmap();
+       Rowmap(int elements, int bits_pixel);
        void readPixelMap(std::ifstream& fin);
        void print();
        void writePixelmap(std::ofstream& fout);
+       void addBits();
+       size_t getSize()const;
 
 
 
 };
 
-void Pixelmap :: writePixelmap(std::ofstream& fout){
+size_t Rowmap :: getSize()const{
+    return this->pixels.size();
+}
+
+void Rowmap :: writePixelmap(std::ofstream& fout){
     if(!fout.is_open())return;
 
 
@@ -360,20 +377,22 @@ void Pixelmap :: writePixelmap(std::ofstream& fout){
     }
 }
 
-Pixelmap :: Pixelmap(){
+Rowmap :: Rowmap(){
     this->pixels = std::vector<Pixel>(0);
 }
 
-void Pixelmap :: resizePixelmap(int elements, int bits_pixel){
+Rowmap :: Rowmap(int elements, int bits_pixel){
     this->pixels = std::vector<Pixel>(elements);
     for(size_t i = 0; i < this->pixels.size(); i++){
-        pixels[i].pushNElements(bits_pixel);
+        pixels[i] = Pixel(bits_pixel);
     }
-
-
+    while(elements * bits_pixel % 4 != 0){
+        pixels.push_back(Pixel(1));
+    }
 }
 
-void Pixelmap :: readPixelMap(std::ifstream& fin){
+
+void Rowmap :: readPixelMap(std::ifstream& fin){
     if(!fin)return;
 
 
@@ -382,32 +401,84 @@ void Pixelmap :: readPixelMap(std::ifstream& fin){
     }
 }
 
-void Pixelmap :: print(){
+void Rowmap :: print(){
     for(size_t i = 0; i < this->pixels.size(); i++){
         pixels[i].printPixel();
+
+    }
+}
+
+
+class ArrayofPixels{
+private:
+    std::vector<Rowmap> rowmaps;
+
+public:
+       ArrayofPixels();
+       ArrayofPixels(int height, int elements, int bits_pixel);
+       void readArray(std::ifstream& fin);
+       void printArray();
+       void writeArray(std::ofstream& fout);
+};
+
+ArrayofPixels :: ArrayofPixels(){
+    this->rowmaps = std::vector<Rowmap>(0);
+}
+
+ArrayofPixels :: ArrayofPixels(int height,int elements, int bits_pixel){
+    this->rowmaps = std::vector<Rowmap>(height);
+    for(size_t i = 0; i < this->rowmaps.size(); i++){
+        this->rowmaps[i] = Rowmap(elements, bits_pixel);
+    }
+}
+
+void ArrayofPixels :: readArray(std::ifstream& fin){
+    if(!fin){
+        return;
+    }
+    for(size_t i = 0; i < this->rowmaps.size(); i++){
+        this->rowmaps[i].readPixelMap(fin);
+    }
+}
+
+
+void ArrayofPixels :: writeArray(std::ofstream& fout){
+    if(!fout.is_open())return;
+
+
+    for(size_t i = 0; i < this->rowmaps.size(); i++){
+        this->rowmaps[i].writePixelmap(fout);
+    }
+}
+
+void ArrayofPixels :: printArray(){
+    for(size_t i = 0; i < this->rowmaps.size(); i++){
+        this->rowmaps[i].print();
         std::cout<<std::endl;
     }
 }
+
 class Bitmap{
 
 private:
     Header header;
     ColorScheme colorscheme;
-    Pixelmap pixelarr;
+    ArrayofPixels pixelarr;
 public:
     Bitmap(std::ifstream& fin);
     void printBitmap();
     void write(std::ofstream& fout);
+
 
 };
 
 Bitmap :: Bitmap(std::ifstream& fin){
 
     header.readHeader(fin);
-    colorscheme.push(header.getfilesize() - (header.getheadersize() + header.getimagesize() + 14));
+    colorscheme = ColorScheme(header.getfilesize() - (header.getheadersize() + header.getimagesize() + 14));
     colorscheme.readColorScheme(fin);
-    pixelarr.resizePixelmap(header.getimagesize() / header.getBitsPerPixel(),header.getBitsPerPixel());
-    pixelarr.readPixelMap(fin);
+    pixelarr = ArrayofPixels(header.getHeight(), floor(header.rowSize() / header.getBitsPerPixel()) ,header.getBitsPerPixel()); //RABOTI SUS STOINOSTI DÐž 9000 - Ð¢ÐžÐ•Ð¡Ð¢ ÐÐšÐž Ð—ÐÐœÐ•Ð¡Ð¢Ð¯ header.getimagesize() / header.getBitsPerPixel() Ð¡ÐªÐ¡ Ð§Ð˜Ð¡Ð›Ðž < = 9000 Ð ÐÐ‘ÐžÐ¢Ð˜
+    pixelarr.readArray(fin);
 }
 
 void Bitmap :: printBitmap(){
@@ -415,7 +486,7 @@ void Bitmap :: printBitmap(){
     std::cout<<std::endl;
     colorscheme.printScheme();
     std::cout<<std::endl;
-    pixelarr.print();
+    pixelarr.printArray();
 
 }
 
@@ -423,7 +494,7 @@ void Bitmap :: write(std::ofstream& fout){
 
         this->header.writeHeader(fout);
         this->colorscheme.writeScheme(fout);
-        this->pixelarr.writePixelmap(fout);
+        this->pixelarr.writeArray(fout);
 
 
 }
@@ -460,14 +531,13 @@ int main()
 //        }
 //    }
 //
-//    std::ifstream fin("45013082_245809212757397_965008924400943104_n.bmp" , std::ios::binary);
+//    std::ifstream fin1("dogs.bmp" , std::ios::binary);
 //    Header h;
-//    h.readHeader(fin);
+//    h.readHeader(fin1);
 //    h.printHeader();
-//    std::cout<<h.pixelArraysize()<<std::endl;
+//    std::cout<<h.rowSize()<<std::endl;
 
-//    ColorScheme c;
-//    c.pushNElements(5);
+//    ColorScheme c(5);
 //    std::ifstream fin("test.txt", std::ios::binary);
 //    c.readColorScheme(fin);
 //    c.printScheme();
@@ -485,8 +555,8 @@ int main()
 //        p.readPixelMap(fin);
 //        p.print();
 
-    std::ifstream fin("45013082_245809212757397_965008924400943104_n.bmp" , std::ios::binary);
-    std::ofstream fout("plswork.txt", std::ios::binary);
+    std::ifstream fin("dogs.bmp" , std::ios::binary);
+    std::ofstream fout("plswork.bmp", std::ios::binary);
     Bitmap bit(fin);
     bit.write(fout);
     bit.printBitmap();
