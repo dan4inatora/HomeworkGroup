@@ -10,10 +10,6 @@ bool fexists(const std::string& filename) {
   return (bool)ifile;
 }
 
-
-
-
-
 #pragma pack(push,2)
 class Header{
 private:
@@ -58,11 +54,15 @@ public:
     unsigned int getHeight()const{
         return this->height;
     }
-    int realsize(int n);
+
+    unsigned int getdataOffset()const{
+        return this->dataOffset;
+    }
+
 
 
 };
-
+#pragma pack(pop)
 Header :: Header(){
 
     this->data[0] = this->data[1] = 0;
@@ -91,7 +91,22 @@ void Header :: readHeader(std::ifstream &fin){
         return;
     }
 
-    fin.read((char*)this , sizeof(Header));
+    fin.read((char*)&this->data , sizeof(this->data));
+    fin.read((char*)&this->fileSize , sizeof(fileSize));
+    fin.read((char*)&this->reserved1 , sizeof(reserved1));
+    fin.read((char*)&this->reserved2 , sizeof(reserved2));
+    fin.read((char*)&this->dataOffset , sizeof(dataOffset));
+    fin.read((char*)&this->header_size , sizeof(header_size));
+    fin.read((char*)&this->width , sizeof(width));
+    fin.read((char*)&this->height , sizeof(height));
+    fin.read((char*)&this->number_color_planes , sizeof(number_color_planes));
+    fin.read((char*)&this->bits_per_pixel , sizeof(bits_per_pixel));
+    fin.read((char*)&this->compression_method , sizeof(compression_method));
+    fin.read((char*)&this->image_size , sizeof(image_size));
+    fin.read((char*)&this->horizontal_resolution , sizeof(horizontal_resolution));
+    fin.read((char*)&this->vertical_resolution , sizeof(vertical_resolution));
+    fin.read((char*)&this->number_colors , sizeof(number_colors));
+    fin.read((char*)&this->number_important_colors , sizeof(number_important_colors));
 
 
 }
@@ -124,16 +139,27 @@ int Header :: rowSize(){
     return rows;
 }
 
-//int Header :: realsize(int n){
-//    stigam do redowe i togava delq na broiq na bitowe w edin piksel i zakruglqm, sled tova subiram wsichki redowe flornati i umnojavam s height;
-//    return 1;
-//}
 
 void Header :: writeHeader(std::ofstream &fout){
 
     if(!fout.is_open()){return;}
-    fout.write((const char*)this, sizeof(Header));
-    fout.close();
+    fout.write((char*)&this->data , sizeof(this->data));
+    fout.write((char*)&this->fileSize , sizeof(fileSize));
+    fout.write((char*)&this->reserved1 , sizeof(reserved1));
+    fout.write((char*)&this->reserved2 , sizeof(reserved2));
+    fout.write((char*)&this->dataOffset , sizeof(dataOffset));
+    fout.write((char*)&this->header_size , sizeof(header_size));
+    fout.write((char*)&this->width , sizeof(width));
+    fout.write((char*)&this->height , sizeof(height));
+    fout.write((char*)&this->number_color_planes , sizeof(number_color_planes));
+    fout.write((char*)&this->bits_per_pixel , sizeof(bits_per_pixel));
+    fout.write((char*)&this->compression_method , sizeof(compression_method));
+    fout.write((char*)&this->image_size , sizeof(image_size));
+    fout.write((char*)&this->horizontal_resolution , sizeof(horizontal_resolution));
+    fout.write((char*)&this->vertical_resolution , sizeof(vertical_resolution));
+    fout.write((char*)&this->number_colors , sizeof(number_colors));
+    fout.write((char*)&this->number_important_colors , sizeof(number_important_colors));
+
 }
 
 class ColorScheme{
@@ -157,15 +183,10 @@ class ColorScheme{
         size_t getSchemesize()const;
         void printScheme();
         void writeScheme(std::ofstream &fout);
-        void pushNElements(int num);
+
 
 
 };
-void ColorScheme :: pushNElements(int num){
-    for(int i = 0; i < num; i++){
-        this->push('a');
-    }
-}
 
 
 void ColorScheme :: writeScheme(std::ofstream &fout){
@@ -347,13 +368,13 @@ void Pixel :: printPixel(){
 }
 
 
-
 class Rowmap{
    private:
        std::vector<Pixel> pixels;
+
    public:
        Rowmap();
-       Rowmap(int elements, int bits_pixel);
+       Rowmap(int elements, int bits_pixel, int rowsize);
        void readPixelMap(std::ifstream& fin);
        void print();
        void writePixelmap(std::ofstream& fout);
@@ -361,8 +382,12 @@ class Rowmap{
        size_t getSize()const;
 
 
-
 };
+
+
+void Rowmap :: addBits(){
+    this->pixels.push_back(Pixel(1));
+}
 
 size_t Rowmap :: getSize()const{
     return this->pixels.size();
@@ -375,20 +400,23 @@ void Rowmap :: writePixelmap(std::ofstream& fout){
     for(size_t i = 0; i < this->pixels.size(); i++){
         this->pixels[i].writePixel(fout);
     }
+
 }
 
 Rowmap :: Rowmap(){
     this->pixels = std::vector<Pixel>(0);
 }
 
-Rowmap :: Rowmap(int elements, int bits_pixel){
-    this->pixels = std::vector<Pixel>(elements);
-    for(size_t i = 0; i < this->pixels.size(); i++){
+Rowmap :: Rowmap(int elements, int bits_pixel, int rowsize){ //
+    int bonusbits = rowsize - (elements * bits_pixel);
+    this->pixels = std::vector<Pixel>(elements + bonusbits);
+    for(int i = 0; i < elements; i++){
         pixels[i] = Pixel(bits_pixel);
     }
-    while(elements * bits_pixel % 4 != 0){
-        pixels.push_back(Pixel(1));
+    for(int j = 0; j < bonusbits; j++){
+        pixels[elements + j] = Pixel(1);
     }
+
 }
 
 
@@ -405,6 +433,7 @@ void Rowmap :: print(){
     for(size_t i = 0; i < this->pixels.size(); i++){
         pixels[i].printPixel();
 
+
     }
 }
 
@@ -415,20 +444,22 @@ private:
 
 public:
        ArrayofPixels();
-       ArrayofPixels(int height, int elements, int bits_pixel);
-       void readArray(std::ifstream& fin);
+       ArrayofPixels(int height, int elements, int bits_pixel, int rowsize);
+       void readArray(std::ifstream& fin);//padd
        void printArray();
        void writeArray(std::ofstream& fout);
+
+
 };
 
 ArrayofPixels :: ArrayofPixels(){
     this->rowmaps = std::vector<Rowmap>(0);
 }
 
-ArrayofPixels :: ArrayofPixels(int height,int elements, int bits_pixel){
+ArrayofPixels :: ArrayofPixels(int height,int elements, int bits_pixel, int rowsize){
     this->rowmaps = std::vector<Rowmap>(height);
     for(size_t i = 0; i < this->rowmaps.size(); i++){
-        this->rowmaps[i] = Rowmap(elements, bits_pixel);
+        this->rowmaps[i] = Rowmap(elements, bits_pixel, rowsize);
     }
 }
 
@@ -436,9 +467,11 @@ void ArrayofPixels :: readArray(std::ifstream& fin){
     if(!fin){
         return;
     }
+
     for(size_t i = 0; i < this->rowmaps.size(); i++){
         this->rowmaps[i].readPixelMap(fin);
     }
+
 }
 
 
@@ -454,7 +487,7 @@ void ArrayofPixels :: writeArray(std::ofstream& fout){
 void ArrayofPixels :: printArray(){
     for(size_t i = 0; i < this->rowmaps.size(); i++){
         this->rowmaps[i].print();
-        std::cout<<std::endl;
+
     }
 }
 
@@ -477,8 +510,12 @@ Bitmap :: Bitmap(std::ifstream& fin){
     header.readHeader(fin);
     colorscheme = ColorScheme(header.getfilesize() - (header.getheadersize() + header.getimagesize() + 14));
     colorscheme.readColorScheme(fin);
-    pixelarr = ArrayofPixels(header.getHeight(), floor(header.rowSize() / header.getBitsPerPixel()) ,header.getBitsPerPixel()); //RABOTI SUS STOINOSTI DÐž 9000 - Ð¢ÐžÐ•Ð¡Ð¢ ÐÐšÐž Ð—ÐÐœÐ•Ð¡Ð¢Ð¯ header.getimagesize() / header.getBitsPerPixel() Ð¡ÐªÐ¡ Ð§Ð˜Ð¡Ð›Ðž < = 9000 Ð ÐÐ‘ÐžÐ¢Ð˜
+    fin.seekg(header.getdataOffset(), fin.beg);
+
+    pixelarr = ArrayofPixels(header.getHeight(), ceil(header.rowSize() / header.getBitsPerPixel()) ,header.getBitsPerPixel(), header.rowSize());
     pixelarr.readArray(fin);
+
+
 }
 
 void Bitmap :: printBitmap(){
@@ -531,7 +568,8 @@ int main()
 //        }
 //    }
 //
-//    std::ifstream fin1("dogs.bmp" , std::ios::binary);
+//    std::ifstream fin1("HelloWorld.bmp" , std::ios::binary);
+//    std::ofstream fout("picsssq.txt");
 //    Header h;
 //    h.readHeader(fin1);
 //    h.printHeader();
@@ -542,8 +580,8 @@ int main()
 //    c.readColorScheme(fin);
 //    c.printScheme();
 
-//      Pixel p;
-//      p.pushNElements(5);
+//      Pixel p(12);
+//
 //      std::ifstream fin("test.txt", std::ios::binary);
 //      p.readPixel(fin);
 //      p.printPixel();
@@ -555,11 +593,26 @@ int main()
 //        p.readPixelMap(fin);
 //        p.print();
 
-    std::ifstream fin("dogs.bmp" , std::ios::binary);
-    std::ofstream fout("plswork.bmp", std::ios::binary);
+//            Rowmap r(6, 4);
+//            std::ifstream fin("test.txt", std::ios::binary);
+//            r.readPixelMap(fin);
+//            r.print();
+
+
+    std::ifstream fin("HelloWorld.bmp" , std::ios::binary );
+    std::ofstream fout("pic4.bmp", std::ios::binary );
     Bitmap bit(fin);
     bit.write(fout);
     bit.printBitmap();
+
+
+//    ArrayofPixels p(100,13,32);
+//    std::ifstream fin("HelloWorld.bmp", std::ios::binary);
+//    std::ofstream fout("test2.bmp", std::ios::binary);//---------------working
+//    p.readArray(fin);
+//    p.writeArray(fout);
+//    p.printArray();
+    //NAMERI KAK DA NAMERISH PADINGA SLED VSEKI RED I DA NE GO ZAPISWASH
 
     return 0;
 }
