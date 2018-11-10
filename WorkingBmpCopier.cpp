@@ -541,8 +541,10 @@ Bitmap& Bitmap :: createNew(int x, int y, int width, int height){
     b->header = this->header;
     b->header.setHeight(height);
     b->header.setWidth(width);
-    b->header.setFileSize(floor(((header.getBitsPerPixel() * width + 31) / 32) * 4) + 54);
-    b->header.setImageSize(floor(((header.getBitsPerPixel() * width + 31) / 32) * 4));
+    int filesize = floor(((header.getBitsPerPixel() * width + 31) / 32) * 4) * height + 54;
+    int imaagesize = floor(((header.getBitsPerPixel() * width + 31) / 32) * 4);
+    b->header.setFileSize(filesize);
+    b->header.setImageSize(imaagesize);
     b->pixelarr = this->pixelarr.copypixels(y, height, x, width);
     b->colorscheme = this->colorscheme;
     return * b;
@@ -600,7 +602,7 @@ void Bitmap :: write(std::ofstream& fout){
 //            for(size_t i = 0; i < vec.size(); i++){
 //                std::cout<<vec[i]<<"!";
 //            }
-             std::cout<<std::endl;
+
              std::string source = vec[0];
              std::string writefile = vec[vec.size() - 1];
 
