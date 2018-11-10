@@ -1,4 +1,5 @@
 #include <iostream>
+#include<sstream>
 #include <fstream>
 #include <string>
 #include <math.h>
@@ -57,6 +58,18 @@ public:
 
     unsigned int getdataOffset()const{
         return this->dataOffset;
+    }
+    void setFileSize(const unsigned int f){
+        this->fileSize = f;
+    }
+    void setWidth(const unsigned int f){
+        this->width = f;
+    }
+    void setHeight(const unsigned int f){
+        this->height = f;
+    }
+    void setImageSize(const unsigned int f){
+        this->image_size = f;
     }
 
 
@@ -376,6 +389,7 @@ class Rowmap{
        Rowmap();
        Rowmap(int elements, int bits_pixel, int rowsize);
        void readPixelMap(std::ifstream& fin);
+       Rowmap& copyRow(int x, int width);
        void print();
        void writePixelmap(std::ofstream& fout);
        void addBits();
@@ -384,6 +398,13 @@ class Rowmap{
 
 };
 
+Rowmap& Rowmap :: copyRow(int x, int width){
+    Rowmap * temp = new Rowmap();
+    for(int i = 0; i < width; i++){
+        temp->pixels.push_back(this->pixels[x + i]);
+    }
+    return *temp;
+}
 
 void Rowmap :: addBits(){
     this->pixels.push_back(Pixel(1));
@@ -447,10 +468,18 @@ public:
        ArrayofPixels(int height, int elements, int bits_pixel, int rowsize);
        void readArray(std::ifstream& fin);//padd
        void printArray();
+       ArrayofPixels& copypixels(int y, int height,int x, int width);
        void writeArray(std::ofstream& fout);
 
 
 };
+ArrayofPixels& ArrayofPixels :: copypixels(int y, int height, int x, int width){
+    ArrayofPixels * arr = new ArrayofPixels();
+    for(int i = 0 ; i < height; i++){
+        arr->rowmaps.push_back(this->rowmaps[y + i].copyRow(x, width));
+    }
+    return * arr;
+}
 
 ArrayofPixels :: ArrayofPixels(){
     this->rowmaps = std::vector<Rowmap>(0);
@@ -498,12 +527,33 @@ private:
     ColorScheme colorscheme;
     ArrayofPixels pixelarr;
 public:
+    Bitmap();
     Bitmap(std::ifstream& fin);
     void printBitmap();
     void write(std::ofstream& fout);
-
+    void cut(std::ifstream& fin);
+    Bitmap& createNew(int x, int y, int width, int height);
 
 };
+
+Bitmap& Bitmap :: createNew(int x, int y, int width, int height){
+    Bitmap * b = new Bitmap();
+    b->header = this->header;
+    b->header.setHeight(height);
+    b->header.setWidth(width);
+    b->header.setFileSize(floor(((header.getBitsPerPixel() * width + 31) / 32) * 4) + 54);
+    b->header.setImageSize(floor(((header.getBitsPerPixel() * width + 31) / 32) * 4));
+    b->pixelarr = this->pixelarr.copypixels(y, height, x, width);
+    b->colorscheme = this->colorscheme;
+    return * b;
+
+}
+
+Bitmap :: Bitmap(){
+    this->header = Header();
+    this->colorscheme = ColorScheme();
+    this->pixelarr = ArrayofPixels();
+}
 
 Bitmap :: Bitmap(std::ifstream& fin){
 
@@ -511,7 +561,6 @@ Bitmap :: Bitmap(std::ifstream& fin){
     colorscheme = ColorScheme(header.getfilesize() - (header.getheadersize() + header.getimagesize() + 14));
     colorscheme.readColorScheme(fin);
     fin.seekg(header.getdataOffset(), fin.beg);
-
     pixelarr = ArrayofPixels(header.getHeight(), ceil(header.rowSize() / header.getBitsPerPixel()) ,header.getBitsPerPixel(), header.rowSize());
     pixelarr.readArray(fin);
 
@@ -535,6 +584,73 @@ void Bitmap :: write(std::ofstream& fout){
 
 
 }
+ void Bitmap :: cut(std::ifstream& fin){
+    std::string currentline;
+    while(std::getline(fin,currentline)){
+        if(currentline[0] != ';'){
+
+            std::stringstream nums(currentline);
+            std::string number;
+            std::vector<std::string> vec;
+            while(nums >> number){
+
+                vec.push_back(number);
+            }
+
+//            for(size_t i = 0; i < vec.size(); i++){
+//                std::cout<<vec[i]<<"!";
+//            }
+             std::cout<<std::endl;
+             std::string source = vec[0];
+             std::string writefile = vec[vec.size() - 1];
+
+             std::string x1 = vec[1];
+             int index1 = x1.find("(");
+             int index2 = x1.find(",");
+             int length = index2 - index1;
+             std::string x = x1.substr(index1 + 1, length - 1);
+
+             int xarg = stoi(x);
+             //std::cout<<xarg<<std::endl;
+
+              std::string y1 = vec[2];
+              int indexy = y1.find(" ");
+              int indexy2 = y1.find(",");
+              int lengthy = indexy2 - indexy;
+              std::string y = y1.substr(0, lengthy - 1);
+
+              int yarg = stoi(y);
+              //std::cout<<yarg<<std::endl;
+
+              std::string width = vec[3];
+              int indexw = width.find(" ");
+              int indexw2 = width.find(",");
+              int length2 = indexw2 - indexw;
+              std::string wid = width.substr(0, length2 - 1);
+
+              int widtharg = stoi(wid);
+              //std::cout<<wid<<std::endl;
+
+              std::string height = vec[4];
+              int indexh = height.find(" ");
+              int indexh2 = height.find(")");
+              int lengthh = indexh2 - indexh;
+              std::string heig = height.substr(0, lengthh - 1);
+
+              //std::cout<<heig<<std::endl;
+
+              int heightarg = stoi(heig);
+
+              std::ifstream curfile(source, std::ios::binary);
+              std::ofstream curfilewrite(writefile, std::ios::binary);
+              Bitmap *temp = new Bitmap(curfile);
+              Bitmap  realcut = temp->createNew(xarg, yarg, widtharg, heightarg);
+              realcut.write(curfilewrite);
+
+        }
+    }
+ }
+
 int main()
 {
 //    std::string name;
@@ -592,18 +708,26 @@ int main()
 //        std::ifstream fin("test.txt", std::ios::binary);
 //        p.readPixelMap(fin);
 //        p.print();
-
-//            Rowmap r(6, 4);
-//            std::ifstream fin("test.txt", std::ios::binary);
+//
+//            Rowmap r(6, 4, 24);
+//            std::ifstream fin("test2.txt", std::ios::binary);
 //            r.readPixelMap(fin);
-//            r.print();
+//            Rowmap b = r.copyRow(3, 2);
+//            b.print();
+//            Rowmap ftry = r.copyRow(5,5);
+//            ftry.print();
+           // r.print();
+
+//            Rowmap c;
+//            c= r;
+//            c.print();
 
 
-    std::ifstream fin("HelloWorld.bmp" , std::ios::binary );
-    std::ofstream fout("pic4.bmp", std::ios::binary );
-    Bitmap bit(fin);
-    bit.write(fout);
-    bit.printBitmap();
+//    std::ifstream fin("HelloWorld.bmp" , std::ios::binary );
+//    std::ofstream fout("pic4.bmp", std::ios::binary );
+//    Bitmap bit(fin);
+//    bit.write(fout);
+//    bit.printBitmap();
 
 
 //    ArrayofPixels p(100,13,32);
@@ -613,6 +737,10 @@ int main()
 //    p.writeArray(fout);
 //    p.printArray();
     //NAMERI KAK DA NAMERISH PADINGA SLED VSEKI RED I DA NE GO ZAPISWASH
+
+    Bitmap f;
+    std::ifstream fin("test.txt");
+    f.cut(fin);
 
     return 0;
 }
